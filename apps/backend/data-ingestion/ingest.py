@@ -1,9 +1,9 @@
 import pdftotext
 import os
 import re
+import json
 
-
-#take in pdf, generate to text; Within text, seperated based on chapter; return this, send out to get chunked
+#take in pdf, generate to text; Within text, seperated based on chapter; within chapter, chunk and return 
     
 def pdfToString (path: str):
     with open (path, "rb") as f:
@@ -32,12 +32,25 @@ def StringToChapters(pdf_text) -> dict[str, str]:
     return chapters
 
 
+#now that have dictionary of chapter : text, chunk each chapter into 1000 character chunks; return dictionary of chapter : list of chunked text
+#Example in finalDict.json
+def ChapterToChunks(chapters: dict[str, str], chunk_size: int = 1000) -> dict[str, list[str]]:
+    chapter_chunks = {}
+    for chapter, text in chapters.items():
+        chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+        chapter_chunks[chapter] = chunks
+    return chapter_chunks
 
-# pdf_path = os.path.join(os.path.dirname(__file__), "Kafka.pdf")
-# pdf = pdfToString(pdf_path)
-# print(pdf)
-# chapters = StringToChapters(pdf)
-# #key-value
-# for chapter, chapter_text in chapters.items():
-#     print(chapter, len(chapter_text))
+#combine all functions
+def pdfToChunks(path: str, chunk_size: int = 1000) -> dict[str, list[str]]:
+    pdf_text = pdfToString(path)
+    chapters = StringToChapters(pdf_text)
+    chapter_chunks = ChapterToChunks(chapters, chunk_size)
+    return chapter_chunks
 
+pdf_path = os.path.join(os.path.dirname(__file__), "Kafka.pdf")
+finalDict = pdfToChunks(pdf_path, chunk_size=1000)
+
+
+with open("finalDict.json", "w", encoding="utf-8") as f:
+    json.dump(finalDict, f, indent=2, ensure_ascii=False, default=str)
