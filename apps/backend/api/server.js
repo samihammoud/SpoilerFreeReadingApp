@@ -1,5 +1,9 @@
 import express from "express";
-import { getCollection } from "../db/chromaDB.js";
+import {
+  createCollection,
+  getCollection,
+  listCollections,
+} from "../db/chromaDB.js";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -27,6 +31,41 @@ app.get("/CollectionsTest", async (_req, res) => {
       error: "Failed to access ChromaDB collection",
     });
   }
+});
+
+app.get("/getAllCollections", async (_req, res) => {
+  try {
+    const collections = await listCollections();
+    res.status(200).json({
+      collections: collections.map((col) => col.name),
+      message: "Successfully retrieved all ChromaDB collections.",
+    });
+  } catch (error) {
+    console.error("Error retrieving ChromaDB collections:", error);
+    res.status(500).json({
+      error: "Failed to retrieve ChromaDB collections",
+    });
+  }
+});
+
+app.post("/CreateCollectionTest", async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: "Collection name is required" });
+    }
+  } catch (error) {
+    console.error("Error creating ChromaDB collection:", error);
+    res.status(500).json({
+      error: "Failed to create ChromaDB collection",
+    });
+  }
+
+  const collection = await createCollection({ name: req.body.name });
+  res.status(200).json({
+    collectionName: collection.name,
+    message: "Successfully created ChromaDB collection.",
+  });
 });
 
 app.get("/", (_req, res) => {

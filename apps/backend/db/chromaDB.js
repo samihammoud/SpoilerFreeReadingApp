@@ -23,6 +23,21 @@ export async function getCollection() {
   return collectionPromise;
 }
 
+export async function listCollections() {
+  return await client.listCollections();
+}
+
+export async function createCollection({ name }) {
+  if (!collectionPromise) {
+    collectionPromise = client.getOrCreateCollection({
+      name: name,
+      embeddingFunction: null,
+    });
+  }
+
+  return collectionPromise;
+}
+
 export async function upsertEmbedding({
   id,
   document,
