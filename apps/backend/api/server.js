@@ -6,10 +6,31 @@ import {
   getSpecificCollection,
 } from "../db/chromaDB.js";
 
+import { createEmbedding } from "../data-ingestion/llm.js";
+
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 
 app.use(express.json());
+
+app.post("/embed", async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || typeof text !== "string") {
+      return res.status(400).json({ error: "Text must be a non-empty string" });
+    }
+
+    const embedding = await createEmbedding(text);
+    res.status(200).json({
+      embedding,
+    });
+  } catch (error) {
+    console.error("Error creating embedding:", error);
+    res.status(500).json({
+      error: "Failed to create embedding",
+    });
+  }
+});
 
 app.get("/health", (_req, res) => {
   res.status(200).json({
@@ -23,7 +44,7 @@ app.get("/collections", async (_req, res) => {
   try {
     const collections = await listCollections();
     res.status(200).json({
-      collections: collections.map((col) => col.name),
+      collections: collections.map((collection) => collection.name),
     });
   } catch (error) {
     console.error("Error retrieving ChromaDB collections:", error);
@@ -35,12 +56,12 @@ app.get("/collections", async (_req, res) => {
 
 app.post("/collections", async (req, res) => {
   try {
-    const { name } = req.body;
-    if (!name) {
+    const { name: collectionName } = req.body;
+    if (!collectionName) {
       return res.status(400).json({ error: "Collection name is required" });
     }
 
-    const collection = await createCollection({ name });
+    const collection = await createCollection({ name: collectionName });
     res.status(201).json({
       collectionName: collection.name,
     });
@@ -52,9 +73,10 @@ app.post("/collections", async (req, res) => {
   }
 });
 
-app.get("/collections/:id", async (req, res) => {
+app.get("/collections/:name", async (req, res) => {
   try {
-    const collection = await getSpecificCollection({ id: req.params.id });
+    const { name: collectionName } = req.params;
+    const collection = await getSpecificCollection({ name: collectionName });
     res.status(200).json({
       collection,
     });
@@ -68,7 +90,7 @@ app.get("/collections/:id", async (req, res) => {
 
 app.post("/collections/:name/embeddings", async (req, res) => {
   try {
-    const { name } = req.params;
+    const { name: collectionName } = req.params;
     const { id, document, embedding, metadata = {} } = req.body;
 
     if (!id || typeof id !== "string") {
@@ -92,7 +114,7 @@ app.post("/collections/:name/embeddings", async (req, res) => {
     }
 
     await upsertEmbedding({
-      collectionName: name,
+      collectionName,
       id,
       document,
       embedding,
@@ -101,7 +123,7 @@ app.post("/collections/:name/embeddings", async (req, res) => {
 
     res.status(200).json({
       ok: true,
-      collectionName: name,
+      collectionName,
       id,
     });
   } catch (error) {

@@ -2,7 +2,7 @@ import { ChromaClient } from "chromadb";
 
 const COLLECTION_NAME = process.env.CHROMA_COLLECTION || "books_docs";
 
-//create client wrapper, host server
+// ChromaDB client configuration
 const client = new ChromaClient({
   host: process.env.CHROMA_HOST || "localhost",
   port: Number(process.env.CHROMA_PORT || 8000),
@@ -11,7 +11,7 @@ const client = new ChromaClient({
 
 let collectionPromise;
 
-//QUERYING BASED ON name given in env (philosophy docs)
+// Returns the default collection defined by env configuration.
 export async function getCollection() {
   if (!collectionPromise) {
     collectionPromise = client.getOrCreateCollection({
@@ -27,10 +27,10 @@ export async function listCollections() {
   return await client.listCollections();
 }
 
-export async function createCollection({ name }) {
+export async function createCollection({ name: collectionName }) {
   if (!collectionPromise) {
     collectionPromise = client.getOrCreateCollection({
-      name: name,
+      name: collectionName,
       embeddingFunction: null,
     });
   }
@@ -39,12 +39,13 @@ export async function createCollection({ name }) {
 }
 
 export async function upsertEmbedding({
+  collectionName: _collectionName,
   id,
   document,
   embedding,
   metadata = {},
 }) {
-  //return a collection object based on id passed in from node server
+  // Uses current behavior: collection is derived from record id.
   const collection = await client.getOrCreateCollection({
     name: id,
     embeddingFunction: null,
@@ -69,14 +70,14 @@ export async function getEmbeddings({ ids, limit = 10 } = {}) {
   return result;
 }
 
-export async function getSpecificCollection({ id }) {
+export async function getSpecificCollection({ name: collectionName }) {
   return client.getOrCreateCollection({
-    name: id,
+    name: collectionName,
     embeddingFunction: null,
   });
 }
 
-//takes in an embedding, compares that
+// Compares a query embedding against vectors in the default collection.
 export async function querySimilarEmbeddings({
   queryEmbedding,
   limit = 1,
@@ -84,14 +85,14 @@ export async function querySimilarEmbeddings({
   if (!queryEmbedding) return [];
 
   const collection = await getCollection();
-  //MONEY QUERY FUNCTION HERE
+  // Query for nearest vectors by embedding similarity.
   const result = await collection.query({
     queryEmbeddings: [queryEmbedding],
     nResults: limit,
     include: ["documents", "metadatas", "distances"],
   });
 
-  //returns nested arays, extract first query batch
+  // Returns nested arrays; extract first query batch.
   const ids = result.ids?.[0] || [];
   const documents = result.documents?.[0] || [];
   const metadatas = result.metadatas?.[0] || [];

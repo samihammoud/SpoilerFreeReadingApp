@@ -48,6 +48,8 @@ def pdfToChunks(path: str, chunk_size: int = 1000) -> dict[str, list[str]]:
     chapter_chunks = ChapterToChunks(chapters, chunk_size)
     return chapter_chunks
 
+#dict of chapter: String will be useful for metadata, list of chunked text specifically will be what is passed into embedding model
+
 pdf_path = os.path.join(os.path.dirname(__file__), "Kafka.pdf")
 finalDict = pdfToChunks(pdf_path, chunk_size=1000)
 
