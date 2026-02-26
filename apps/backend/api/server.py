@@ -28,12 +28,12 @@ collection_cache: dict[str, Any] = {}
 
 class EmbedRequest(BaseModel):
     filePath: str = Field(min_length=1)
-    collectionName: str = Field(min_length=1)
+    collectionId: str = Field(min_length=1)
     chunkSize: int = Field(default=1000, gt=0)
 
 
 class CreateCollectionRequest(BaseModel):
-    name: str = Field(min_length=1)
+    collectionId: str = Field(min_length=1)
 
 
 class UpsertRequest(BaseModel):
@@ -51,7 +51,7 @@ def embed_pdf(payload: EmbedRequest):
 
     result = run_ingestion_pipeline(
         file_path=resolved_path,
-        collection_name=payload.collectionName,
+        collection_id=payload.collectionId,
         chunk_size=payload.chunkSize,
     )
     return {"status": "completed", **result}
@@ -69,29 +69,31 @@ def health() -> dict[str, Any]:
 def collections() -> dict[str, Any]:
     collections_list = chroma_client.list_collections()
     names = [collection.name for collection in collections_list]
-    return {"collections": names}
+    return {"collectionIds": names}
 
 
 @app.post("/collections", status_code=201)
 def create_collection(payload: CreateCollectionRequest) -> dict[str, Any]:
-    collection = get_or_create_collection(payload.name)
-    return {"collectionName": collection.name}
+    collection = get_or_create_collection(payload.collectionId)
+    return {"collectionId": collection.name}
 
 
-@app.get("/collections/{name}")
-def get_collection(name: str) -> dict[str, Any]:
-    collection = get_or_create_collection(name)
+@app.get("/collections/{collection_id}")
+def get_collection(collection_id: str) -> dict[str, Any]:
+    collection = get_or_create_collection(collection_id)
     return {
         "collection": {
-            "name": collection.name,
+            "collectionId": collection.name,
             "metadata": collection.metadata,
         }
     }
 
 
-@app.post("/collections/{name}/embeddings")
-def upsert_collection_embedding(name: str, payload: UpsertRequest) -> dict[str, Any]:
-    collection = get_or_create_collection(name)
+@app.post("/collections/{collection_id}/embeddings")
+def upsert_collection_embedding(
+    collection_id: str, payload: UpsertRequest
+) -> dict[str, Any]:
+    collection = get_or_create_collection(collection_id)
     collection.upsert(
         ids=[payload.id],
         embeddings=[payload.embedding],
@@ -100,7 +102,7 @@ def upsert_collection_embedding(name: str, payload: UpsertRequest) -> dict[str, 
     )
     return {
         "ok": True,
-        "collectionName": name,
+        "collectionId": collection_id,
         "id": payload.id,
     }
 
@@ -111,15 +113,15 @@ def root() -> dict[str, str]:
 
 
 def run_ingestion_pipeline(
-    *, file_path: Path, collection_name: str, chunk_size: int
+    *, file_path: Path, collection_id: str, chunk_size: int
 ) -> dict[str, Any]:
-    collection = get_or_create_collection(collection_name)
+    collection = get_or_create_collection(collection_id)
     chapter_chunk_map = run_ingest(file_path=file_path, chunk_size=chunk_size)
     records = flatten_chunk_map(chapter_chunk_map=chapter_chunk_map, file_path=file_path)
 
     if not records:
         return {
-            "collectionName": collection_name,
+            "collectionId": collection_id,
             "filePath": str(file_path),
             "totalChunks": 0,
             "upsertedChunks": 0,
@@ -147,7 +149,7 @@ def run_ingestion_pipeline(
         processed += len(batch)
 
     return {
-        "collectionName": collection_name,
+        "collectionId": collection_id,
         "filePath": str(file_path),
         "totalChunks": len(records),
         "upsertedChunks": processed,
@@ -163,13 +165,13 @@ def create_embeddings(inputs: list[str]) -> list[list[float]]:
     return [item.embedding for item in response.data]
 
 
-def get_or_create_collection(name: str):
-    if name not in collection_cache:
-        collection_cache[name] = chroma_client.get_or_create_collection(
-            name=name,
+def get_or_create_collection(collection_id: str):
+    if collection_id not in collection_cache:
+        collection_cache[collection_id] = chroma_client.get_or_create_collection(
+            name=collection_id,
             embedding_function=None,
         )
-    return collection_cache[name]
+    return collection_cache[collection_id]
 
 
 def run_ingest(*, file_path: Path, chunk_size: int) -> dict[str, list[str]]:
