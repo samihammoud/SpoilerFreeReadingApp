@@ -1,8 +1,9 @@
 import express from "express";
 import {
   createCollection,
-  getCollection,
   listCollections,
+  upsertEmbedding,
+  getSpecificCollection,
 } from "../db/chromaDB.js";
 
 const app = express();
@@ -18,27 +19,11 @@ app.get("/health", (_req, res) => {
   });
 });
 
-app.get("/CollectionsTest", async (_req, res) => {
-  try {
-    const collection = await getCollection();
-    res.status(200).json({
-      collectionName: collection.name,
-      message: "Successfully accessed ChromaDB collection.",
-    });
-  } catch (error) {
-    console.error("Error accessing ChromaDB collection:", error);
-    res.status(500).json({
-      error: "Failed to access ChromaDB collection",
-    });
-  }
-});
-
-app.get("/getAllCollections", async (_req, res) => {
+app.get("/collections", async (_req, res) => {
   try {
     const collections = await listCollections();
     res.status(200).json({
       collections: collections.map((col) => col.name),
-      message: "Successfully retrieved all ChromaDB collections.",
     });
   } catch (error) {
     console.error("Error retrieving ChromaDB collections:", error);
@@ -48,24 +33,83 @@ app.get("/getAllCollections", async (_req, res) => {
   }
 });
 
-app.post("/CreateCollectionTest", async (req, res) => {
+app.post("/collections", async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) {
       return res.status(400).json({ error: "Collection name is required" });
     }
+
+    const collection = await createCollection({ name });
+    res.status(201).json({
+      collectionName: collection.name,
+    });
   } catch (error) {
     console.error("Error creating ChromaDB collection:", error);
     res.status(500).json({
       error: "Failed to create ChromaDB collection",
     });
   }
+});
 
-  const collection = await createCollection({ name: req.body.name });
-  res.status(200).json({
-    collectionName: collection.name,
-    message: "Successfully created ChromaDB collection.",
-  });
+app.get("/collections/:id", async (req, res) => {
+  try {
+    const collection = await getSpecificCollection({ id: req.params.id });
+    res.status(200).json({
+      collection,
+    });
+  } catch (error) {
+    console.error("Error retrieving specific ChromaDB collection:", error);
+    res.status(500).json({
+      error: "Failed to retrieve specific ChromaDB collection",
+    });
+  }
+});
+
+app.post("/collections/:name/embeddings", async (req, res) => {
+  try {
+    const { name } = req.params;
+    const { id, document, embedding, metadata = {} } = req.body;
+
+    if (!id || typeof id !== "string") {
+      return res.status(400).json({ error: "id must be a non-empty string" });
+    }
+
+    if (!document || typeof document !== "string") {
+      return res
+        .status(400)
+        .json({ error: "document must be a non-empty string" });
+    }
+
+    if (
+      !Array.isArray(embedding) ||
+      embedding.length === 0 ||
+      !embedding.every((value) => typeof value === "number")
+    ) {
+      return res.status(400).json({
+        error: "embedding must be a non-empty array of numbers",
+      });
+    }
+
+    await upsertEmbedding({
+      collectionName: name,
+      id,
+      document,
+      embedding,
+      metadata,
+    });
+
+    res.status(200).json({
+      ok: true,
+      collectionName: name,
+      id,
+    });
+  } catch (error) {
+    console.error("Error inserting into ChromaDB collection:", error);
+    res.status(500).json({
+      error: "Failed to insert into ChromaDB collection",
+    });
+  }
 });
 
 app.get("/", (_req, res) => {

@@ -44,7 +44,11 @@ export async function upsertEmbedding({
   embedding,
   metadata = {},
 }) {
-  const collection = await getCollection();
+  //return a collection object based on id passed in from node server
+  const collection = await client.getOrCreateCollection({
+    name: id,
+    embeddingFunction: null,
+  });
 
   await collection.upsert({
     ids: [id],
@@ -52,11 +56,6 @@ export async function upsertEmbedding({
     documents: [document],
     metadatas: [metadata],
   });
-
-  return {
-    collection: COLLECTION_NAME,
-    id,
-  };
 }
 
 export async function getEmbeddings({ ids, limit = 10 } = {}) {
@@ -68,6 +67,13 @@ export async function getEmbeddings({ ids, limit = 10 } = {}) {
 
   const result = await collection.get(query);
   return result;
+}
+
+export async function getSpecificCollection({ id }) {
+  return client.getOrCreateCollection({
+    name: id,
+    embeddingFunction: null,
+  });
 }
 
 //takes in an embedding, compares that
