@@ -14,5 +14,8 @@
     "dev:frontend": "npm run dev -w @chapter-and-verse/frontend",
     "build:frontend": "npm run build -w @chapter-and-verse/frontend",
     "preview:frontend": "npm run preview -w @chapter-and-verse/frontend"
+  },
+  "dependencies": {
+    "redis": "^5.11.0"
   }
 }

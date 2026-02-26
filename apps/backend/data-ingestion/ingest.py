@@ -2,6 +2,7 @@ import pdftotext
 import os
 import re
 import json
+import argparse
 
 #take in pdf, generate to text; Within text, seperated based on chapter; within chapter, chunk and return 
     
@@ -48,11 +49,15 @@ def pdfToChunks(path: str, chunk_size: int = 1000) -> dict[str, list[str]]:
     chapter_chunks = ChapterToChunks(chapters, chunk_size)
     return chapter_chunks
 
-#dict of chapter: String will be useful for metadata, list of chunked text specifically will be what is passed into embedding model
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--file-path", required=True)
+    parser.add_argument("--chunk-size", type=int, default=1000)
+    args = parser.parse_args()
 
-pdf_path = os.path.join(os.path.dirname(__file__), "Kafka.pdf")
-finalDict = pdfToChunks(pdf_path, chunk_size=1000)
+    final_dict = pdfToChunks(args.file_path, chunk_size=args.chunk_size)
+    print(json.dumps(final_dict, ensure_ascii=False))
 
 
-with open("finalDict.json", "w", encoding="utf-8") as f:
-    json.dump(finalDict, f, indent=2, ensure_ascii=False, default=str)
+if __name__ == "__main__":
+    main()

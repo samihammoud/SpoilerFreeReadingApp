@@ -28,26 +28,21 @@ export async function listCollections() {
 }
 
 export async function createCollection({ name: collectionName }) {
-  if (!collectionPromise) {
-    collectionPromise = client.getOrCreateCollection({
-      name: collectionName,
-      embeddingFunction: null,
-    });
-  }
-
-  return collectionPromise;
+  return await client.getOrCreateCollection({
+    name: collectionName,
+    embeddingFunction: null,
+  });
 }
 
 export async function upsertEmbedding({
-  collectionName: _collectionName,
+  collectionName = COLLECTION_NAME,
   id,
   document,
   embedding,
   metadata = {},
 }) {
-  // Uses current behavior: collection is derived from record id.
   const collection = await client.getOrCreateCollection({
-    name: id,
+    name: collectionName,
     embeddingFunction: null,
   });
 

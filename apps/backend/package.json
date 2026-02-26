@@ -2,18 +2,8 @@
   "name": "@chapter-and-verse/backend",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
   "scripts": {
-    "dev": "nodemon api/server.js",
-    "start": "node api/server.js"
-  },
-  "dependencies": {
-    "chromadb": "*",
-    "dotenv": "^17.3.1",
-    "express": "^4.21.2",
-    "openai": "^6.25.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.10"
+    "dev": "python3 -m uvicorn api.server:app --reload --port 3001",
+    "start": "python3 -m uvicorn api.server:app --host 0.0.0.0 --port 3001"
   }
 }
