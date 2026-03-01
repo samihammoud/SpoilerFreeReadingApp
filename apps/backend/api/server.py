@@ -1,14 +1,14 @@
 import hashlib
+import importlib.util
 import os
 from pathlib import Path
 from typing import Any
 
-import chromadb
+from db.chroma import get_or_create_collection, list_collection_ids
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from openai import OpenAI
 from pydantic import BaseModel, Field
-import importlib.util
 
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_ROOT = APP_DIR.parent
@@ -18,12 +18,6 @@ load_dotenv(BACKEND_ROOT / ".env")
 
 app = FastAPI(title="chapter-and-verse-api")
 openai_client = OpenAI()
-chroma_client = chromadb.HttpClient(
-    host=os.getenv("CHROMA_HOST", "localhost"),
-    port=int(os.getenv("CHROMA_PORT", "8000")),
-    ssl=os.getenv("CHROMA_SSL", "false").lower() == "true",
-)
-collection_cache: dict[str, Any] = {}
 
 
 class EmbedRequest(BaseModel):
@@ -36,11 +30,13 @@ class CreateCollectionRequest(BaseModel):
     collectionId: str = Field(min_length=1)
 
 
+
 class UpsertRequest(BaseModel):
     id: str = Field(min_length=1)
     document: str = Field(min_length=1)
     embedding: list[float] = Field(min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
 
 
 @app.post("/embed")
@@ -67,9 +63,7 @@ def health() -> dict[str, Any]:
 
 @app.get("/collections")
 def collections() -> dict[str, Any]:
-    collections_list = chroma_client.list_collections()
-    names = [collection.name for collection in collections_list]
-    return {"collectionIds": names}
+    return {"collectionIds": list_collection_ids()}
 
 
 @app.post("/collections", status_code=201)
@@ -163,15 +157,6 @@ def create_embeddings(inputs: list[str]) -> list[list[float]]:
         encoding_format="float",
     )
     return [item.embedding for item in response.data]
-
-
-def get_or_create_collection(collection_id: str):
-    if collection_id not in collection_cache:
-        collection_cache[collection_id] = chroma_client.get_or_create_collection(
-            name=collection_id,
-            embedding_function=None,
-        )
-    return collection_cache[collection_id]
 
 
 def run_ingest(*, file_path: Path, chunk_size: int) -> dict[str, list[str]]:
