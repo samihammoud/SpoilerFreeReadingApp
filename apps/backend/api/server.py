@@ -1,8 +1,8 @@
 import hashlib
-import importlib.util
 from pathlib import Path
 from typing import Any
 
+from data_ingestion.ingest import pdf_to_chunks
 from db.chroma import get_or_create_collection, list_collection_ids
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_ROOT = APP_DIR.parent
-INGEST_SCRIPT_PATH = BACKEND_ROOT / "data-ingestion" / "ingest.py"
 
 load_dotenv(BACKEND_ROOT / ".env")
 
@@ -158,18 +157,10 @@ def create_embeddings(inputs: list[str]) -> list[list[float]]:
     return [item.embedding for item in response.data]
 
 
-# Dynamically load ingest.py and convert a PDF file into chapter-based chunks.
+# Convert a PDF file into chapter-based chunks.
 def run_ingest(*, file_path: Path, chunk_size: int) -> dict[str, list[str]]:
-    module_name = "chapter_and_verse_ingest"
-    spec = importlib.util.spec_from_file_location(module_name, INGEST_SCRIPT_PATH)
-    if spec is None or spec.loader is None:
-        raise HTTPException(status_code=500, detail="Failed to load ingest.py")
-
-    ingest_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(ingest_module)
-
     try:
-        return ingest_module.pdfToChunks(str(file_path), chunk_size=chunk_size)
+        return pdf_to_chunks(str(file_path), chunk_size=chunk_size)
     except Exception as error:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {error}") from error
 

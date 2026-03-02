@@ -16,7 +16,7 @@ apps/
 
   backend/                  # Backend and ingestion code
     api/
-    data-ingestion/
+    data_ingestion/
 ```
 
 ## Workspace setup

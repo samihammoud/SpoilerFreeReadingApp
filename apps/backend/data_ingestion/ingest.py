@@ -48,6 +48,11 @@ def pdfToChunks(path: str, chunk_size: int = 1000) -> dict[str, list[str]]:
     chapter_chunks = ChapterToChunks(chapters, chunk_size)
     return chapter_chunks
 
+
+def pdf_to_chunks(path: str, chunk_size: int = 1000) -> dict[str, list[str]]:
+    """Snake_case alias used by package imports."""
+    return pdfToChunks(path, chunk_size=chunk_size)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--file-path", required=True)

@@ -5,7 +5,7 @@ Backend code for Chapter & Verse.
 ## Current contents
 
 - `api/`: API service placeholder.
-- `data-ingestion/`: ingestion scripts and supporting files.
+- `data_ingestion/`: ingestion scripts and supporting files.
 
 ## Notes
 
