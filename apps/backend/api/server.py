@@ -19,6 +19,7 @@ app = FastAPI(title="chapter-and-verse-api")
 openai_client = OpenAI()
 
 
+#define 
 class EmbedRequest(BaseModel):
     filePath: str = Field(min_length=1)
     collectionId: str = Field(min_length=1)
@@ -26,6 +27,7 @@ class EmbedRequest(BaseModel):
 
 class CreateCollectionRequest(BaseModel):
     collectionId: str = Field(min_length=1)
+
 
 class UpsertRequest(BaseModel):
     id: str = Field(min_length=1)
