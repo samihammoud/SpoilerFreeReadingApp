@@ -115,6 +115,7 @@ def run_ingestion_pipeline(
     *, file_path: Path, collection_id: str, chunk_size: int
 ) -> dict[str, Any]:
     collection = get_or_create_collection(collection_id)
+
     records = run_ingest(file_path=file_path, chunk_size=chunk_size)
 
     if not records:
@@ -133,11 +134,16 @@ def run_ingestion_pipeline(
             detail="Embedding response count did not match record count",
         )
 
-#each index of the embeddings list corresponds to the same index in the records list, so we can upsert them together
+#each index of the embeddings list corresponds to the same index in the records list, so we can upsert them together in parralel
+#builds lists by iterating through records
+
+#get the value at specified key for each dictionary in records; list comprehension
     collection.upsert(
         ids=[record["id"] for record in records],
         embeddings=embeddings,
         documents=[record["document"] for record in records],
+
+        #metadata expects list of dicts, so we extract the metadata from each record into a new list
         metadatas=[record["metadata"] for record in records],
     )
 
@@ -159,7 +165,7 @@ def create_embeddings(inputs: list[str]) -> list[list[float]]:
     return [item.embedding for item in response.data]
 
 
-# Convert a PDF file into vector-store records.
+# Convert a PDF file into chunks/format of records ready for upsert 
 def run_ingest(*, file_path: Path, chunk_size: int) -> list[dict[str, Any]]:
     try:
         chunk_items = pdf_to_chunks(str(file_path), chunk_size=chunk_size)
@@ -175,10 +181,12 @@ def run_ingest(*, file_path: Path, chunk_size: int) -> list[dict[str, Any]]:
             if not isinstance(chunk, str) or not chunk.strip():
                 continue
 
+            #generate unique ID for chunk
             digest = hashlib.sha1(
                 f"{source_file_name}|{chapter}|{index}|{chunk}".encode("utf-8")
             ).hexdigest()[:16]
 
+            #list of dicts; each value gets dynamically added to array for later upsert
             records.append(
                 {
                     "id": f"{source_file_name}:{chapter}:{index}:{digest}",
