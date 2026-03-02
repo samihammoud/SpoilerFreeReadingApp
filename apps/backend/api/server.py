@@ -9,7 +9,6 @@ from .services.ingestion import IngestionService
 
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_ROOT = APP_DIR.parent
-
 load_dotenv(BACKEND_ROOT / ".env")
 
 app = FastAPI(title="chapter-and-verse-api")
@@ -36,8 +35,7 @@ class UpsertRequest(BaseModel):
 
 @app.post("/embed")
 # Ingest a PDF, generate embeddings for all chunks, and upsert them into a collection.
-#validate file path, take in collectionId and chunkSize(default 1000)
-#run_ingestion_pipeline, calls ingest script, embeds those chunks, upserts to chroma; return status and metadata about the operation
+
 def embed_pdf(payload: EmbedRequest):
     resolved_path = resolve_file_path(payload.filePath)
     if not resolved_path.exists() or not resolved_path.is_file():
@@ -122,3 +120,4 @@ def resolve_file_path(input_path: str) -> Path:
         raise HTTPException(status_code=400, detail="Invalid file path") from error
 
     return resolved
+
