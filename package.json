@@ -6,7 +6,7 @@
     "apps/*"
   ],
   "scripts": {
-    "start": "sh -c 'pid=$(lsof -ti tcp:8000); if [ -n \"$pid\" ]; then kill -9 $pid 2>/dev/null || true; fi; chroma run --host 127.0.0.1 --port 8000 --path apps/backend/chroma & npm run dev:backend & npm run dev:frontend & wait'",
+    "start": "sh -c 'unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy; export NO_PROXY=127.0.0.1,localhost; export no_proxy=127.0.0.1,localhost; pid=$(lsof -ti tcp:8000); if [ -n \"$pid\" ]; then kill -9 $pid 2>/dev/null || true; fi; chroma run --host 127.0.0.1 --port 8000 --path apps/backend/chroma & npm run dev:backend & npm run dev:frontend & wait'",
     "dev": "npm start",
     "stop": "sh -c 'for p in 3001 5173 8000; do pid=$(lsof -ti tcp:$p); if [ -n \"$pid\" ]; then kill $pid 2>/dev/null || true; fi; done'",
     "dev:backend": "npm run dev -w @chapter-and-verse/backend",
