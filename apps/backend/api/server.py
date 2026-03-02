@@ -1,6 +1,5 @@
 import hashlib
 import importlib.util
-import os
 from pathlib import Path
 from typing import Any
 
@@ -25,11 +24,8 @@ class EmbedRequest(BaseModel):
     collectionId: str = Field(min_length=1)
     chunkSize: int = Field(default=1000, gt=0)
 
-
 class CreateCollectionRequest(BaseModel):
     collectionId: str = Field(min_length=1)
-
-
 
 class UpsertRequest(BaseModel):
     id: str = Field(min_length=1)
@@ -37,9 +33,8 @@ class UpsertRequest(BaseModel):
     embedding: list[float] = Field(min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-
-
 @app.post("/embed")
+# Ingest a PDF, generate embeddings for all chunks, and upsert them into a collection.
 def embed_pdf(payload: EmbedRequest):
     resolved_path = resolve_file_path(payload.filePath)
     if not resolved_path.exists() or not resolved_path.is_file():
@@ -54,6 +49,7 @@ def embed_pdf(payload: EmbedRequest):
 
 
 @app.get("/health")
+# Return a lightweight health check for service monitoring.
 def health() -> dict[str, Any]:
     return {
         "ok": True,
@@ -62,17 +58,20 @@ def health() -> dict[str, Any]:
 
 
 @app.get("/collections")
+# List all known Chroma collection IDs.
 def collections() -> dict[str, Any]:
     return {"collectionIds": list_collection_ids()}
 
 
 @app.post("/collections", status_code=201)
+# Create a collection if it does not exist and return its ID.
 def create_collection(payload: CreateCollectionRequest) -> dict[str, Any]:
     collection = get_or_create_collection(payload.collectionId)
     return {"collectionId": collection.name}
 
 
 @app.get("/collections/{collection_id}")
+# Fetch metadata for a specific collection.
 def get_collection(collection_id: str) -> dict[str, Any]:
     collection = get_or_create_collection(collection_id)
     return {
@@ -84,6 +83,7 @@ def get_collection(collection_id: str) -> dict[str, Any]:
 
 
 @app.post("/collections/{collection_id}/embeddings")
+# Upsert a single precomputed embedding record into a collection.
 def upsert_collection_embedding(
     collection_id: str, payload: UpsertRequest
 ) -> dict[str, Any]:
@@ -102,10 +102,12 @@ def upsert_collection_embedding(
 
 
 @app.get("/")
+# Return a simple root message for quick manual checks.
 def root() -> dict[str, str]:
     return {"message": "Chapter & Verse backend is running."}
 
 
+# Execute the full ingestion pipeline from PDF chunks to vector upsert.
 def run_ingestion_pipeline(
     *, file_path: Path, collection_id: str, chunk_size: int
 ) -> dict[str, Any]:
@@ -121,35 +123,30 @@ def run_ingestion_pipeline(
             "upsertedChunks": 0,
         }
 
-    batch_size = int(os.getenv("EMBED_BATCH_SIZE", "25"))
-    processed = 0
+    embeddings = create_embeddings([record["document"] for record in records])
 
-    for start in range(0, len(records), batch_size):
-        batch = records[start : start + batch_size]
-        embeddings = create_embeddings([record["document"] for record in batch])
-
-        if len(embeddings) != len(batch):
-            raise HTTPException(
-                status_code=500,
-                detail="Embedding response count did not match batch size",
-            )
-
-        collection.upsert(
-            ids=[record["id"] for record in batch],
-            embeddings=embeddings,
-            documents=[record["document"] for record in batch],
-            metadatas=[record["metadata"] for record in batch],
+    if len(embeddings) != len(records):
+        raise HTTPException(
+            status_code=500,
+            detail="Embedding response count did not match record count",
         )
-        processed += len(batch)
+
+    collection.upsert(
+        ids=[record["id"] for record in records],
+        embeddings=embeddings,
+        documents=[record["document"] for record in records],
+        metadatas=[record["metadata"] for record in records],
+    )
 
     return {
         "collectionId": collection_id,
         "filePath": str(file_path),
         "totalChunks": len(records),
-        "upsertedChunks": processed,
+        "upsertedChunks": len(records),
     }
 
 
+# Create embeddings for a list of text chunks using OpenAI embeddings API.
 def create_embeddings(inputs: list[str]) -> list[list[float]]:
     response = openai_client.embeddings.create(
         model="text-embedding-3-small",
@@ -159,6 +156,7 @@ def create_embeddings(inputs: list[str]) -> list[list[float]]:
     return [item.embedding for item in response.data]
 
 
+# Dynamically load ingest.py and convert a PDF file into chapter-based chunks.
 def run_ingest(*, file_path: Path, chunk_size: int) -> dict[str, list[str]]:
     module_name = "chapter_and_verse_ingest"
     spec = importlib.util.spec_from_file_location(module_name, INGEST_SCRIPT_PATH)
@@ -174,6 +172,7 @@ def run_ingest(*, file_path: Path, chunk_size: int) -> dict[str, list[str]]:
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {error}") from error
 
 
+# Resolve and validate file paths so input stays within the backend directory.
 def resolve_file_path(input_path: str) -> Path:
     raw = Path(input_path.strip())
     resolved = raw.resolve() if raw.is_absolute() else (APP_DIR / raw).resolve()
@@ -186,6 +185,7 @@ def resolve_file_path(input_path: str) -> Path:
     return resolved
 
 
+# Flatten chapter chunk output into records with stable IDs and metadata for storage.
 def flatten_chunk_map(
     *, chapter_chunk_map: dict[str, list[str]], file_path: Path
 ) -> list[dict[str, Any]]:

@@ -29,3 +29,11 @@ yarn-error.log*
 
 # Local backend env
 backend/.env
+
+# Python
+.venv/
+**/__pycache__/
+*.pyc
+
+# Local backend vector store
+apps/backend/chroma/
