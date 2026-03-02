@@ -3,6 +3,7 @@ from openai import OpenAI
 _openai_client = None
 
 
+#lazy initialization of OpenAI client, since it may not be needed for all API calls and we want to avoid unnecessary initialization overhead
 def get_openai_client() -> OpenAI:
     global _openai_client
     if _openai_client is None:
