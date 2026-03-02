@@ -1,13 +1,11 @@
-import hashlib
 from pathlib import Path
 from typing import Any
 
-from data_ingestion.ingest import pdf_to_chunks
-from db.chroma import get_or_create_collection, list_collection_ids
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from services.llm import create_embeddings
+from .services.chroma_service import ChromaService
+from .services.ingestion import IngestionService
 
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_ROOT = APP_DIR.parent
@@ -15,6 +13,8 @@ BACKEND_ROOT = APP_DIR.parent
 load_dotenv(BACKEND_ROOT / ".env")
 
 app = FastAPI(title="chapter-and-verse-api")
+chroma_service = ChromaService()
+ingestion_service = IngestionService(chroma_service=chroma_service)
 
 
 class EmbedRequest(BaseModel):
@@ -43,7 +43,7 @@ def embed_pdf(payload: EmbedRequest):
     if not resolved_path.exists() or not resolved_path.is_file():
         raise HTTPException(status_code=400, detail="filePath does not exist")
 
-    result = run_ingestion_pipeline(
+    result = ingestion_service.run_ingestion_pipeline(
         file_path=resolved_path,
         collection_id=payload.collectionId,
         chunk_size=payload.chunkSize,
@@ -64,20 +64,20 @@ def health() -> dict[str, Any]:
 @app.get("/collections")
 # List all known Chroma collection IDs.
 def collections() -> dict[str, Any]:
-    return {"collectionIds": list_collection_ids()}
+    return {"collectionIds": chroma_service.list_collection_ids()}
 
 
 @app.post("/collections", status_code=201)
 # Create a collection if it does not exist and return its ID.
 def create_collection(payload: CreateCollectionRequest) -> dict[str, Any]:
-    collection = get_or_create_collection(payload.collectionId)
+    collection = chroma_service.get_or_create_collection(payload.collectionId)
     return {"collectionId": collection.name}
 
 
 @app.get("/collections/{collection_id}")
 # Fetch metadata for a specific collection.
 def get_collection(collection_id: str) -> dict[str, Any]:
-    collection = get_or_create_collection(collection_id)
+    collection = chroma_service.get_or_create_collection(collection_id)
     return {
         "collection": {
             "collectionId": collection.name,
@@ -91,12 +91,12 @@ def get_collection(collection_id: str) -> dict[str, Any]:
 def upsert_collection_embedding(
     collection_id: str, payload: UpsertRequest
 ) -> dict[str, Any]:
-    collection = get_or_create_collection(collection_id)
-    collection.upsert(
-        ids=[payload.id],
-        embeddings=[payload.embedding],
-        documents=[payload.document],
-        metadatas=[payload.metadata],
+    chroma_service.upsert_embedding(
+        collection_id=collection_id,
+        record_id=payload.id,
+        document=payload.document,
+        embedding=payload.embedding,
+        metadata=payload.metadata,
     )
     return {
         "ok": True,
@@ -109,91 +109,6 @@ def upsert_collection_embedding(
 # Return a simple root message for quick manual checks.
 def root() -> dict[str, str]:
     return {"message": "Chapter & Verse backend is running."}
-
-
-# Execute the full ingestion pipeline from PDF chunks to vector upsert.
-def run_ingestion_pipeline(
-    *, file_path: Path, collection_id: str, chunk_size: int
-) -> dict[str, Any]:
-    collection = get_or_create_collection(collection_id)
-
-    records = run_ingest(file_path=file_path, chunk_size=chunk_size)
-
-    if not records:
-        return {
-            "collectionId": collection_id,
-            "filePath": str(file_path),
-            "totalChunks": 0,
-            "upsertedChunks": 0,
-        }
-
-    embeddings = create_embeddings([record["document"] for record in records])
-
-    if len(embeddings) != len(records):
-        raise HTTPException(
-            status_code=500,
-            detail="Embedding response count did not match record count",
-        )
-
-#each index of the embeddings list corresponds to the same index in the records list, so we can upsert them together in parralel
-#builds lists by iterating through records
-
-#get the value at specified key for each dictionary in records; list comprehension
-    collection.upsert(
-        ids=[record["id"] for record in records],
-        embeddings=embeddings,
-        documents=[record["document"] for record in records],
-
-        #metadata can be list of dicts
-        metadatas=[record["metadata"] for record in records],
-    )
-
-    return {
-        "collectionId": collection_id,
-        "filePath": str(file_path),
-        "totalChunks": len(records),
-        "upsertedChunks": len(records),
-    }
-
-
-# Convert a PDF file into chunks/format of records ready for upsert 
-def run_ingest(*, file_path: Path, chunk_size: int) -> list[dict[str, Any]]:
-    try:
-        chunk_items = pdf_to_chunks(str(file_path), chunk_size=chunk_size)
-        records: list[dict[str, Any]] = []
-        source_file_name = file_path.name
-
-        for item in chunk_items:
-            chapter = item.get("chapter")
-            index = item.get("chunkIndex")
-            chunk = item.get("text")
-            if not isinstance(chapter, str) or not isinstance(index, int):
-                continue
-            if not isinstance(chunk, str) or not chunk.strip():
-                continue
-
-            #generate unique ID for chunk
-            digest = hashlib.sha1(
-                f"{source_file_name}|{chapter}|{index}|{chunk}".encode("utf-8")
-            ).hexdigest()[:16]
-
-            #list of dicts; each value gets dynamically added to array for later upsert
-            records.append(
-                {
-                    "id": f"{source_file_name}:{chapter}:{index}:{digest}",
-                    "document": chunk,
-                    "metadata": {
-                        "chapter": chapter,
-                        "chunkIndex": index,
-                        "sourceFileName": source_file_name,
-                        "sourcePath": str(file_path),
-                    },
-                }
-            )
-
-        return records
-    except Exception as error:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {error}") from error
 
 
 # Resolve and validate file paths so input stays within the backend directory.
