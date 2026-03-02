@@ -36,6 +36,8 @@ class UpsertRequest(BaseModel):
 
 @app.post("/embed")
 # Ingest a PDF, generate embeddings for all chunks, and upsert them into a collection.
+#validate file path, take in collectionId and chunkSize(default 1000)
+#run_ingestion_pipeline, calls ingest script, embeds those chunks, upserts to chroma; return status and metadata about the operation
 def embed_pdf(payload: EmbedRequest):
     resolved_path = resolve_file_path(payload.filePath)
     if not resolved_path.exists() or not resolved_path.is_file():
@@ -113,8 +115,7 @@ def run_ingestion_pipeline(
     *, file_path: Path, collection_id: str, chunk_size: int
 ) -> dict[str, Any]:
     collection = get_or_create_collection(collection_id)
-    chapter_chunk_map = run_ingest(file_path=file_path, chunk_size=chunk_size)
-    records = flatten_chunk_map(chapter_chunk_map=chapter_chunk_map, file_path=file_path)
+    records = run_ingest(file_path=file_path, chunk_size=chunk_size)
 
     if not records:
         return {
@@ -132,6 +133,7 @@ def run_ingestion_pipeline(
             detail="Embedding response count did not match record count",
         )
 
+#each index of the embeddings list corresponds to the same index in the records list, so we can upsert them together
     collection.upsert(
         ids=[record["id"] for record in records],
         embeddings=embeddings,
@@ -157,39 +159,19 @@ def create_embeddings(inputs: list[str]) -> list[list[float]]:
     return [item.embedding for item in response.data]
 
 
-# Convert a PDF file into chapter-based chunks.
-def run_ingest(*, file_path: Path, chunk_size: int) -> dict[str, list[str]]:
+# Convert a PDF file into vector-store records.
+def run_ingest(*, file_path: Path, chunk_size: int) -> list[dict[str, Any]]:
     try:
-        return pdf_to_chunks(str(file_path), chunk_size=chunk_size)
-    except Exception as error:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {error}") from error
+        chunk_items = pdf_to_chunks(str(file_path), chunk_size=chunk_size)
+        records: list[dict[str, Any]] = []
+        source_file_name = file_path.name
 
-
-# Resolve and validate file paths so input stays within the backend directory.
-def resolve_file_path(input_path: str) -> Path:
-    raw = Path(input_path.strip())
-    resolved = raw.resolve() if raw.is_absolute() else (APP_DIR / raw).resolve()
-
-    try:
-        resolved.relative_to(BACKEND_ROOT)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail="Invalid file path") from error
-
-    return resolved
-
-
-# Flatten chapter chunk output into records with stable IDs and metadata for storage.
-def flatten_chunk_map(
-    *, chapter_chunk_map: dict[str, list[str]], file_path: Path
-) -> list[dict[str, Any]]:
-    records: list[dict[str, Any]] = []
-    source_file_name = file_path.name
-
-    for chapter, chunks in (chapter_chunk_map or {}).items():
-        if not isinstance(chunks, list):
-            continue
-
-        for index, chunk in enumerate(chunks):
+        for item in chunk_items:
+            chapter = item.get("chapter")
+            index = item.get("chunkIndex")
+            chunk = item.get("text")
+            if not isinstance(chapter, str) or not isinstance(index, int):
+                continue
             if not isinstance(chunk, str) or not chunk.strip():
                 continue
 
@@ -210,4 +192,19 @@ def flatten_chunk_map(
                 }
             )
 
-    return records
+        return records
+    except Exception as error:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {error}") from error
+
+
+# Resolve and validate file paths so input stays within the backend directory.
+def resolve_file_path(input_path: str) -> Path:
+    raw = Path(input_path.strip())
+    resolved = raw.resolve() if raw.is_absolute() else (APP_DIR / raw).resolve()
+
+    try:
+        resolved.relative_to(BACKEND_ROOT)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Invalid file path") from error
+
+    return resolved

@@ -2,6 +2,7 @@ import pdftotext
 import re
 import json
 import argparse
+from typing import Any
 
 #take in pdf, generate to text; Within text, seperated based on chapter; within chapter, chunk and return 
     
@@ -31,25 +32,29 @@ def StringToChapters(pdf_text) -> dict[str, str]:
 
     return chapters
 
-
-#now that have dictionary of chapter : text, chunk each chapter into 1000 character chunks; return dictionary of chapter : list of chunked text
-#Example in finalDict.json
-def ChapterToChunks(chapters: dict[str, str], chunk_size: int = 1000) -> dict[str, list[str]]:
-    chapter_chunks = {}
-    for chapter, text in chapters.items():
-        chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
-        chapter_chunks[chapter] = chunks
-    return chapter_chunks
-
 #combine all functions
-def pdfToChunks(path: str, chunk_size: int = 1000) -> dict[str, list[str]]:
+def pdfToChunks(path: str, chunk_size: int = 1000) -> list[dict[str, Any]]:
     pdf_text = pdfToString(path)
     chapters = StringToChapters(pdf_text)
-    chapter_chunks = ChapterToChunks(chapters, chunk_size)
-    return chapter_chunks
+    items: list[dict[str, Any]] = []
+
+    for chapter, text in chapters.items():
+        chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+        for index, chunk in enumerate(chunks):
+            if not isinstance(chunk, str) or not chunk.strip():
+                continue
+            items.append(
+                {
+                    "chapter": chapter,
+                    "chunkIndex": index,
+                    "text": chunk,
+                }
+            )
+
+    return items
 
 
-def pdf_to_chunks(path: str, chunk_size: int = 1000) -> dict[str, list[str]]:
+def pdf_to_chunks(path: str, chunk_size: int = 1000) -> list[dict[str, Any]]:
     """Snake_case alias used by package imports."""
     return pdfToChunks(path, chunk_size=chunk_size)
 
