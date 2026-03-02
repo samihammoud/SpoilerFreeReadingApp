@@ -1,7 +1,7 @@
-fastapi
-uvicorn[standard]
-openai
-chromadb
-python-dotenv
-pdftotext
-pydantic
+fastapi==0.115.6
+uvicorn[standard]==0.41.0
+openai==1.57.4
+chromadb==1.5.0
+python-dotenv==1.1.0
+pdftotext==2.2.2
+pydantic==2.10.3
