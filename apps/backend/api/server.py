@@ -6,8 +6,8 @@ from data_ingestion.ingest import pdf_to_chunks
 from db.chroma import get_or_create_collection, list_collection_ids
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from openai import OpenAI
 from pydantic import BaseModel, Field
+from services.llm import create_embeddings
 
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_ROOT = APP_DIR.parent
@@ -15,14 +15,13 @@ BACKEND_ROOT = APP_DIR.parent
 load_dotenv(BACKEND_ROOT / ".env")
 
 app = FastAPI(title="chapter-and-verse-api")
-openai_client = OpenAI()
 
 
-#define 
 class EmbedRequest(BaseModel):
     filePath: str = Field(min_length=1)
     collectionId: str = Field(min_length=1)
     chunkSize: int = Field(default=1000, gt=0)
+
 
 class CreateCollectionRequest(BaseModel):
     collectionId: str = Field(min_length=1)
@@ -33,6 +32,7 @@ class UpsertRequest(BaseModel):
     document: str = Field(min_length=1)
     embedding: list[float] = Field(min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
 
 @app.post("/embed")
 # Ingest a PDF, generate embeddings for all chunks, and upsert them into a collection.
@@ -49,6 +49,7 @@ def embed_pdf(payload: EmbedRequest):
         chunk_size=payload.chunkSize,
     )
     return {"status": "completed", **result}
+
 
 
 @app.get("/health")
@@ -143,7 +144,7 @@ def run_ingestion_pipeline(
         embeddings=embeddings,
         documents=[record["document"] for record in records],
 
-        #metadata expects list of dicts, so we extract the metadata from each record into a new list
+        #metadata can be list of dicts
         metadatas=[record["metadata"] for record in records],
     )
 
@@ -153,16 +154,6 @@ def run_ingestion_pipeline(
         "totalChunks": len(records),
         "upsertedChunks": len(records),
     }
-
-
-# Create embeddings for a list of text chunks using OpenAI embeddings API.
-def create_embeddings(inputs: list[str]) -> list[list[float]]:
-    response = openai_client.embeddings.create(
-        model="text-embedding-3-small",
-        input=inputs,
-        encoding_format="float",
-    )
-    return [item.embedding for item in response.data]
 
 
 # Convert a PDF file into chunks/format of records ready for upsert 
