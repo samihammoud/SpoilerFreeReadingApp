@@ -60,6 +60,7 @@ class IngestionService:
                 if not isinstance(chunk, str) or not chunk.strip():
                     continue
 
+                #create our own UUID to prevent duplicates across potentially multiple ingestions
                 digest = hashlib.sha1(
                     f"{source_file_name}|{chapter}|{index}|{chunk}".encode("utf-8")
                 ).hexdigest()[:16]
