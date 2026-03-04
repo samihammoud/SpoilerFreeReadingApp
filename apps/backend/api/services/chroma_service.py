@@ -32,14 +32,19 @@ class ChromaService:
         results = collection.query(
             query_embeddings=[query_embedding],
             n_results=limit,
-            include=["documents", "metadatas"],
+            include=["documents", "metadatas", "embeddings"],
         )
         matches = []
-        for doc, metadata in zip(results["documents"][0], results["metadatas"][0]):
+        for doc, metadata, embedding in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+            results["embeddings"][0],
+        ):
+            embedding_list = [float(value) for value in embedding] if embedding is not None else None
             matches.append({
                 "document": doc,
                 "metadata": metadata,
-                "embedding": query_embedding,
+                "embedding": embedding_list,
             })
         return matches
 

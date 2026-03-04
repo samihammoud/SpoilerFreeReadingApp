@@ -74,6 +74,7 @@ async def ask_question_test(collection_id: str, payload: AskRequest) -> dict[str
     return {
         "retrievedQuote": top_match["document"] if top_match else None,
         "metadata": top_match["metadata"] if top_match else None,
+        "embedding": top_match.get("embedding") if top_match else None,
         
         
     }

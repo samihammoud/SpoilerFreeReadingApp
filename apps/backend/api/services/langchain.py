@@ -62,4 +62,5 @@ async def get_top_match(question: str, collection_id: str) -> dict[str, Any] | N
     return {
         "document": doc.get("document"),
         "metadata": doc.get("metadata"),
+        "embedding": doc.get("embedding"),
     }
