@@ -2,6 +2,7 @@ from typing import Any
 
 from db.chroma_client import get_client
 
+
 class ChromaService:
     def __init__(self):
         self._collection_cache: dict[str, Any] = {}
@@ -19,6 +20,28 @@ class ChromaService:
                 embedding_function=None,
             )
         return self._collection_cache[collection_id]
+
+    def query_similar_embeddings(
+        self,
+        *,
+        collection_id: str,
+        query_embedding: list[float],
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        collection = self.get_or_create_collection(collection_id)
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=limit,
+            include=["documents", "metadatas"],
+        )
+        matches = []
+        for doc, metadata in zip(results["documents"][0], results["metadatas"][0]):
+            matches.append({
+                "document": doc,
+                "metadata": metadata,
+                "embedding": query_embedding,
+            })
+        return matches
 
     # Upsert one precomputed embedding record.
     def upsert_embedding(
@@ -59,3 +82,13 @@ class ChromaService:
             metadatas=[record["metadata"] for record in records],
         )
         return len(records)
+
+
+_chroma_service: ChromaService | None = None
+
+
+def get_chroma_service() -> ChromaService:
+    global _chroma_service
+    if _chroma_service is None:
+        _chroma_service = ChromaService()
+    return _chroma_service

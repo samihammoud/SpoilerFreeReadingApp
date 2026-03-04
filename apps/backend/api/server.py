@@ -4,15 +4,17 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from .services.chroma_service import ChromaService
-from .services.ingestion import IngestionService
 
 APP_DIR = Path(__file__).resolve().parent
 BACKEND_ROOT = APP_DIR.parent
 load_dotenv(BACKEND_ROOT / ".env")
 
+from .services.chroma_service import get_chroma_service
+from .services.ingestion import IngestionService
+from .services.langchain import ask_with_langchain, get_top_match
+
 app = FastAPI(title="chapter-and-verse-api")
-chroma_service = ChromaService()
+chroma_service = get_chroma_service()
 ingestion_service = IngestionService(chroma_service=chroma_service)
 
 
@@ -32,6 +34,9 @@ class UpsertRequest(BaseModel):
     embedding: list[float] = Field(min_length=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1)
+
 
 @app.post("/embed")
 # Ingest a PDF, generate embeddings for all chunks, and upsert them into a collection.
@@ -47,6 +52,31 @@ def embed_pdf(payload: EmbedRequest):
         chunk_size=payload.chunkSize,
     )
     return {"status": "completed", **result}
+
+
+@app.post("/{collection_id}/ask")
+# Answer a user question by retrieving relevant context and invoking the LLM.
+async def ask_question(collection_id: str, payload: AskRequest) -> dict[str, Any]:
+    answer = await ask_with_langchain(
+        question=payload.question,
+        collection_id=collection_id,
+    )
+    return {"answer": answer}
+
+
+@app.post("/{collection_id}/ask/test")
+# Return only the retrieved quote used as context for question answering.
+async def ask_question_test(collection_id: str, payload: AskRequest) -> dict[str, Any]:
+    top_match = await get_top_match(
+        question=payload.question,
+        collection_id=collection_id,
+    )
+    return {
+        "retrievedQuote": top_match["document"] if top_match else None,
+        "metadata": top_match["metadata"] if top_match else None,
+        
+        
+    }
 
 
 
@@ -120,4 +150,3 @@ def resolve_file_path(input_path: str) -> Path:
         raise HTTPException(status_code=400, detail="Invalid file path") from error
 
     return resolved
-
