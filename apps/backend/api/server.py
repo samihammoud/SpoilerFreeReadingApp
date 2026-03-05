@@ -11,7 +11,7 @@ load_dotenv(BACKEND_ROOT / ".env")
 
 from .services.chroma_service import get_chroma_service
 from .services.ingestion import IngestionService
-from .services.langchain import ask_with_langchain, get_top_match
+from .services.langchain import ask_with_langchain, get_top_match, get_top_12_matches
 
 app = FastAPI(title="chapter-and-verse-api")
 chroma_service = get_chroma_service()
@@ -62,23 +62,6 @@ async def ask_question(collection_id: str, payload: AskRequest) -> dict[str, Any
         collection_id=collection_id,
     )
     return {"answer": answer}
-
-
-@app.post("/{collection_id}/ask/test")
-# Return only the retrieved quote used as context for question answering.
-async def ask_question_test(collection_id: str, payload: AskRequest) -> dict[str, Any]:
-    top_match = await get_top_match(
-        question=payload.question,
-        collection_id=collection_id,
-    )
-    return {
-        "retrievedQuote": top_match["document"] if top_match else None,
-        "metadata": top_match["metadata"] if top_match else None,
-        "embedding": top_match.get("embedding") if top_match else None,
-        
-        
-    }
-
 
 
 @app.get("/health")
