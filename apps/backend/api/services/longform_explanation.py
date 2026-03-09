@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -82,22 +83,73 @@ def build_timeline_context(matches: list[dict[str, Any]]) -> str:
         ),
     )
 
-    lines: list[str] = []
+    chapter_context: dict[str, dict[str, Any]] = {}
+    evidence_lines: list[str] = []
+
     for index, match in enumerate(ordered_matches, start=1):
         metadata = match.get("metadata") or {}
         chapter = metadata.get("chapter", "unknown")
         chunk_index = metadata.get("chunkIndex", "unknown")
+        chapter_key = chapter if isinstance(chapter, str) else str(chapter)
         document = match.get("document") if isinstance(match.get("document"), str) else ""
         compact_document = " ".join(document.split())
-        excerpt = compact_document[:500]
-        lines.append(f"{index}. chapter={chapter}, chunk={chunk_index}, excerpt={excerpt}")
+        excerpt = compact_document[:220]
 
+        entry = chapter_context.setdefault(
+            chapter_key,
+            {"summary": "", "events": [], "introduced": []},
+        )
+        summary = metadata.get("chapterSummary")
+        if isinstance(summary, str) and summary.strip() and not entry["summary"]:
+            entry["summary"] = summary.strip()
+
+        events = metadata.get("keyEventsJson")
+        if isinstance(events, str) and events.strip():
+            try:
+                parsed_events = json.loads(events)
+                if isinstance(parsed_events, list):
+                    for event in parsed_events:
+                        if isinstance(event, str) and event.strip():
+                            entry["events"].append(event.strip())
+            except json.JSONDecodeError:
+                pass
+
+        introduced = metadata.get("introducedCharactersJson")
+        if isinstance(introduced, str) and introduced.strip():
+            try:
+                parsed_characters = json.loads(introduced)
+                if isinstance(parsed_characters, list):
+                    for character in parsed_characters:
+                        if isinstance(character, str) and character.strip():
+                            entry["introduced"].append(character.strip())
+            except json.JSONDecodeError:
+                pass
+
+        if len(evidence_lines) < 16:
+            evidence_lines.append(
+                f"{index}. chapter={chapter}, chunk={chunk_index}, excerpt={excerpt}"
+            )
+
+    lines: list[str] = []
+    for chapter, context in chapter_context.items():
+        events = list(dict.fromkeys(context["events"]))[:6]
+        introduced = list(dict.fromkeys(context["introduced"]))[:10]
+        lines.append(f"chapter={chapter}")
+        if context["summary"]:
+            lines.append(f"summary={context['summary']}")
+        if events:
+            lines.append(f"events={'; '.join(events)}")
+        if introduced:
+            lines.append(f"introduced_characters={', '.join(introduced)}")
+
+    lines.append("evidence:")
+    lines.extend(evidence_lines)
     return "\n".join(lines)
 
 
 def build_longform_prompt(question: str, timeline_context: str) -> str:
     return f"""You are a longform retrieval explanation assistant.
-Use only the Timeline context below.
+Use only the Timeline context below, especially chapter summaries, key events, introduced characters, and evidence excerpts.
 
 Task:
 1) Identify relevant chapter progression.

@@ -4,6 +4,11 @@ import json
 import argparse
 from typing import Any
 
+try:
+    from .enrich_ingestion import enrich_chapters_with_local_llama
+except ImportError:
+    from enrich_ingestion import enrich_chapters_with_local_llama
+
 #take in pdf, generate to text; Within text, seperated based on chapter; within chapter, chunk and return 
     
 def pdfToString (path: str):
@@ -62,10 +67,38 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--file-path", required=True)
     parser.add_argument("--chunk-size", type=int, default=1000)
+    parser.add_argument("--enrich-local-llama", action="store_true")
+    parser.add_argument("--local-llama-model", default="llama3.1:8b-instruct-q4_K_M")
+    parser.add_argument("--local-llama-timeout-seconds", type=float, default=90.0)
     args = parser.parse_args()
 
-    final_dict = pdfToChunks(args.file_path, chunk_size=args.chunk_size)
-    print(json.dumps(final_dict, ensure_ascii=False))
+    chunks = pdfToChunks(args.file_path, chunk_size=args.chunk_size)
+    if not args.enrich_local_llama:
+        print(json.dumps(chunks, ensure_ascii=False))
+        return
+
+    enrichments = enrich_chapters_with_local_llama(
+        chunks,
+        model=args.local_llama_model,
+        timeout_seconds=args.local_llama_timeout_seconds,
+    )
+    serialized_enrichments = {
+        chapter: {
+            "chapter_summary": item.chapter_summary,
+            "key_events": item.key_events,
+            "introduced_characters": item.introduced_characters,
+        }
+        for chapter, item in enrichments.items()
+    }
+    print(
+        json.dumps(
+            {
+                "chunks": chunks,
+                "chapter_enrichment": serialized_enrichments,
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 if __name__ == "__main__":

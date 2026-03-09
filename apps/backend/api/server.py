@@ -54,6 +54,22 @@ def embed_pdf(payload: EmbedRequest):
     return {"status": "completed", **result}
 
 
+@app.post("/embedTest")
+# Ingest a PDF up to chapter 3 to reduce embedding cost in test runs.
+def embed_pdf_test(payload: EmbedRequest):
+    resolved_path = resolve_file_path(payload.filePath)
+    if not resolved_path.exists() or not resolved_path.is_file():
+        raise HTTPException(status_code=400, detail="filePath does not exist")
+
+    result = ingestion_service.run_ingestion_pipeline(
+        file_path=resolved_path,
+        collection_id=payload.collectionId,
+        chunk_size=payload.chunkSize,
+        max_chapter_inclusive=3,
+    )
+    return {"status": "completed", **result}
+
+
 @app.post("/{collection_id}/ask")
 # Answer a user question by retrieving relevant context and invoking the LLM.
 async def ask_question(collection_id: str, payload: AskRequest) -> dict[str, Any]:
