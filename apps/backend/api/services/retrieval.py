@@ -12,7 +12,7 @@ DEFAULT_COLLECTION_ID = os.getenv("DEFAULT_COLLECTION_ID", "default")
 
 
 
-##uses reranking file to get top match
+
 async def get_top_match(
     question: str,
     *,
@@ -26,6 +26,7 @@ async def get_top_match(
         collection_id=active_collection_id,
         embedding_model=embedding_model,
     )
+    ##uses reranking file to get top match
     best_match = await rerank_matches_by_question(
         question=question,
         matches=matches,

@@ -5,7 +5,10 @@ from typing import Any
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
+from .intent import classify_intent
+from .longform_explanation import answer_with_longform_explanation
 from .llm import get_openai_async_client, get_openai_client
+from .qa_retrieval import answer_with_qa_retrieval
 from .retrieval import (
     get_top_12_matches as retrieve_top_12_matches,
 )
@@ -30,34 +33,26 @@ embedding_model = OpenAIEmbeddings(
 )
 
 
-def build_prompt(context: str, question: str) -> str:
-    return f"""You are a retrieval QA assistant.
-
-If the quote does not contain enough relevant information, reply exactly:
-"I couldn't find a suitable quote for that question."
-
-Retrieved quote:
-{context}
-
-Question:
-{question}
-
-Return only the final answer."""
-
-
-
-async def ask_with_langchain(question: str, collection_id: str | None = None) -> str:
+async def ask_with_langchain(question: str, collection_id: str | None = None) -> Any:
     active_collection_id = collection_id or DEFAULT_COLLECTION_ID
-    top_match = await get_top_match(
+    intent = await classify_intent(
+        question=question,
+        chat_model=chat_model,
+    )
+
+    if intent == "longform_explanation":
+        return await answer_with_longform_explanation(
+            question=question,
+            collection_id=active_collection_id,
+            embedding_model=embedding_model,
+            chat_model=chat_model,
+        )
+    return await answer_with_qa_retrieval(
         question=question,
         collection_id=active_collection_id,
+        embedding_model=embedding_model,
+        chat_model=chat_model,
     )
-    context = top_match["document"] if top_match else "No matching quote was retrieved."
-    prompt = build_prompt(context, question)
-
-    response = await chat_model.ainvoke(prompt)
-    content = response.content
-    return content if isinstance(content, str) else str(content)
 
 
 async def get_top_match(question: str, collection_id: str | None = None) -> dict[str, Any] | None:
